@@ -18,7 +18,7 @@ An  Android live streaming application built with [RootEncoder RTMP library](htt
 - **Real-time Camera Switching** — Seamless front/back camera toggle during live streams
 - **Network Resilience** — Automatic reconnection with 3-second retry logic on network dropouts
 - **Adaptive Bitrate** — Dynamic quality adjustment based on network conditions (API 19+)
-- **Multi-Resolution Support** — Four broadcasting profiles from 360p to 1080p
+- **Multi-Resolution Support** — Four broadcasting profiles from 360p to 1080p.
  
 #### Advanced Features
 - **Screen Wake Lock** — Prevents device from sleeping during broadcasts using FLAG_KEEP_SCREEN_ON
