@@ -62,7 +62,7 @@ https://github.com/user-attachments/assets/a3e90666-99a1-491e-b652-3ac988bdc7e8
  
 1. **Clone the repository**
 ```bash
-git clone https://github.com/example-fastpix-live-ios.git
+git clone https://github.com/FastPix/fastpix-android-live-streaming-demo-app.git
  
 ```
  
