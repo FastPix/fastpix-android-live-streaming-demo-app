@@ -6,8 +6,15 @@ An  Android live streaming application built with [RootEncoder RTMP library](htt
  
 ## Demo App
  
-<!-- Add your demo gif/screenshot here -->
-![FastPix Live Android Demo](app/src/main/res/drawable/demo.gif)
+
+
+https://github.com/user-attachments/assets/a3e90666-99a1-491e-b652-3ac988bdc7e8
+
+
+
+
+
+
  
 ---
  
@@ -37,8 +44,7 @@ An  Android live streaming application built with [RootEncoder RTMP library](htt
  
 ## Known Limitations
  
-- Streaming resolution 1080p may result in occasional frame drops, lowering frame rate to around 20fps on older devices
-- Camera switching performed on background thread to prevent UI blocking
+- frame drops, lowering frame rate to around 20fps on older devices
 - SSL cleanup warnings during connection failures are expected and handled gracefully
 - Rotation changes during active streaming should be avoided to prevent connection instability
  
@@ -200,18 +206,8 @@ override fun onNewBitrate(bitrate: Long) { runOnUiThread { bitrateLabel.text = "
 - Black screen? Check camera permissions, stream key, physical device.
 - Connection failure? Verify network, RTMP endpoint, stream key.
 - SSL/TLS cleanup warnings? Expected, handled in code.
-- Frame drops? Use 720p/540p presets on older devices.
+- Frame drops issues
  
 ---
  
  
-## License
- 
-This project uses [RootEncoder](https://github.com/pedroSG94/RootEncoder), licensed under Apache License 2.0.
- 
----
- 
-## Acknowledgments
- 
-- **RootEncoder** by @pedroSG94
----
