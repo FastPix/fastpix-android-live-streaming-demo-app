@@ -55,7 +55,7 @@ https://github.com/user-attachments/assets/a3e90666-99a1-491e-b652-3ac988bdc7e8
 ### Prerequisites
  
 1. **FastPix Account** — Sign up at [FastPix Dashboard](https://dashboard.fastpix.io/signup)
-2. **RTMP Stream Key** — Create a live stream and obtain your unique stream key
+2. **RTMP Stream Key** — Create a live stream and obtain your [unique stream key](https://docs.fastpix.io/docs/get-started-with-live-streaming). For more details about `streamKey`, see Step 3.
 3. **Android Device** — Android API 16+ required (physical device recommended for optimal performance)
  
 ## Installation
