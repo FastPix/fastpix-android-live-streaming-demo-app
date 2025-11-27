@@ -1,1 +1,135 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+.build/
+build/
+*/build/
+
+# Gradle files
+.gradle/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Keystore files
+*.jks
+*.keystore
+*.p12
+
+# Signing files (if stored)
+signingConfigs.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/libraries
+# JetBrains IDE specific
+.idea/*/contentModel.xml
+/.idea/caches
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+
+# User-specific files
+*.orig
+*.swp
+*~.nib
+*.sublime-workspace
+*.sublime-project
+
+# Editor directories and files
+.vscode/
+.vscode/*
+
+# MacOS
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Crashlytics / Fabric
+crashlytics-build.properties
+
+# Google Services (if you don't want to keep it in repo)
+# If you need google-services.json in repo for CI or build, remove this
+google-services.json
+
+# Firebase / Play Services - optional
+# If you keep your keys out of repo
+firebase-debug.log
+
+# Proguard
+proguard/
+proguard-rules.pro
+
+# Native / NDK
+obj/
+*.so
+*.a
+*.o
+
+# CMake intermediate files
+CMakeFiles
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Kotlin
+*.kotlin_module
+
+# Gradle wrapper jar (keep the wrapper script but ignore the jar if you don't commit it)
+gradle-wrapper.jar
+
+# Distribution / packaging
+*.zip
+*.tar.gz
+
+# Node / React Native (if applicable)
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+.expo/
+.expo-shared/
+
+# Android Studio capture / profilers
+captures/
+*.hprof
+
+# Log files
+*.log
+
+# Dependency directories
+/.idea/libraries/
+
+# Misc
+coverage/
+.gitignore
+
+# ======================
+# Optional: keep IDE/run configurations in repo?
+# If you want to share run configurations, remove the relevant .idea runConfigurations/* ignore lines above.
+# ======================
