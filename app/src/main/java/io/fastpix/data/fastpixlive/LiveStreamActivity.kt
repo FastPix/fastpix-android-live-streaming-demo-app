@@ -31,6 +31,7 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
         private const val ZERO_KBPS = "0 kbps"
         private const val ZERO_FPS = "0 fps"
         private const val GO_LIVE_TEXT = "Go Live!"
+        private const val CHANNEL_IS_CLOSED_FOR_WRITE = "Channel is closed for write"
     }
 
     enum class Preset(val bitrate: Int, val width: Int, val height: Int, val frameRate: Int) {
@@ -205,7 +206,7 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
                     true
                 )
 
-                val streamUrl = "$rtmpEndpoint/${streamKey ?: ""}"
+                val streamUrl = "$rtmpEndpoint/${streamKey.orEmpty()}"
                 rtmpCamera.startStream(streamUrl)
                 liveDesired = true
                 goLiveButton.text = "Connecting... (Cancel)"
@@ -237,13 +238,11 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
                 }
             } catch (e: IOException) {
                 // Specifically catch and ignore SSL/TLS cleanup errors
-                if (e.message?.contains("Channel is closed for write") == true) {
+                if (e.message?.contains(CHANNEL_IS_CLOSED_FOR_WRITE) == true) {
                     Log.w(TAG, "SSL cleanup race condition (expected): ${e.message}")
                 } else {
                     Log.e(TAG, "Stream stop error: ${e.message}")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Stream stop error: ${e.message}")
             } finally {
                 isStoppingStream = false
                 runOnUiThread {
@@ -323,11 +322,9 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
                     }
                     Thread.sleep(1000)
                 } catch (e: IOException) {
-                    if (e.message?.contains("Channel is closed for write") == true) {
+                    if (e.message?.contains(CHANNEL_IS_CLOSED_FOR_WRITE) == true) {
                         Log.w(TAG, "SSL cleanup during retry (expected)")
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error during retry cleanup: ${e.message}")
                 }
 
                 // Retry after cleanup
@@ -389,11 +386,9 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
                     rtmpCamera.stopStream()
                 }
             } catch (e: IOException) {
-                if (e.message?.contains("Channel is closed for write") == true) {
+                if (e.message?.contains(CHANNEL_IS_CLOSED_FOR_WRITE) == true) {
                     Log.w(TAG, "SSL cleanup in onDestroy (expected)")
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Cleanup error in onDestroy (non-fatal): ${e.message}")
             }
         }
     }
