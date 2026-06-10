@@ -24,7 +24,8 @@ import com.pedro.library.util.FpsListener
 import com.pedro.library.view.OpenGlView
 import java.io.IOException
 
-class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectChecker, View.OnTouchListener {
+class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectChecker,
+    View.OnTouchListener {
 
     companion object {
         private const val TAG = "FastPixLive"
@@ -132,7 +133,10 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
                     }
                 }
 
-                override fun onEncodeError(type: CodecTypeError, e: IllegalStateException): Boolean {
+                override fun onEncodeError(
+                    type: CodecTypeError,
+                    e: IllegalStateException
+                ): Boolean {
                     Log.e(TAG, "Encode error [$type]: ${e.message}")
                     return true
                 }
@@ -215,9 +219,7 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
         }
     }
 
-    private fun getPreviewPreset(): Preset {
-        return preset ?: Preset.sd_540p_30fps_2mbps
-    }
+    private fun getPreviewPreset(): Preset = preset ?: Preset.sd_540p_30fps_2mbps
 
     private fun startPreviewIfNeeded() {
         if (!::rtmpCamera.isInitialized || rtmpCamera.isStreaming) return
@@ -246,7 +248,7 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
         Log.i(
             TAG,
             "Encoder prep ${targetPreset.name} (${targetPreset.width}x${targetPreset.height}): " +
-                "video=$videoReady audio=$audioReady"
+                    "video=$videoReady audio=$audioReady"
         )
         return videoReady && audioReady
     }
@@ -274,8 +276,12 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
         val rotation = windowManager.defaultDisplay.rotation
         when (rotation) {
             Surface.ROTATION_90 -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            Surface.ROTATION_180 -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
-            Surface.ROTATION_270 -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+            Surface.ROTATION_180 -> requestedOrientation =
+                ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+
+            Surface.ROTATION_270 -> requestedOrientation =
+                ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+
             else -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
 
@@ -298,14 +304,20 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
 
             val preparedPreset = prepareEncodersWithFallback(selectedPreset)
             if (preparedPreset == null) {
-                Log.e(TAG, "All encoder configurations failed on ${Build.MANUFACTURER} ${Build.MODEL}")
+                Log.e(
+                    TAG,
+                    "All encoder configurations failed on ${Build.MANUFACTURER} ${Build.MODEL}"
+                )
                 showToast("This device cannot initialize video/audio encoders")
                 return
             }
             activePreset = preparedPreset
 
             val streamUrl = buildStreamUrl(key)
-            Log.i(TAG, "Publishing to $streamUrl at ${preparedPreset.width}x${preparedPreset.height}")
+            Log.i(
+                TAG,
+                "Publishing to $streamUrl at ${preparedPreset.width}x${preparedPreset.height}"
+            )
             rtmpCamera.startStream(streamUrl)
             liveDesired = true
             goLiveButton.text = "Connecting... (Cancel)"
@@ -367,12 +379,17 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
                 Log.e(
                     TAG,
                     "Stream health check failed on ${Build.MANUFACTURER} ${Build.MODEL}: " +
-                        "connected but sending 0 fps / 0 kbps"
+                            "connected but sending 0 fps / 0 kbps"
                 )
                 showToast("Connected but no video is being sent. Try 360p quality.")
             }
         }
-        healthCheckHandler.postDelayed(healthCheckRunnable!!, STREAM_HEALTH_CHECK_DELAY_MS)
+        healthCheckRunnable?.let {
+            healthCheckHandler.postDelayed(
+                it,
+                STREAM_HEALTH_CHECK_DELAY_MS
+            )
+        }
     }
 
     private fun cancelStreamHealthCheck() {
@@ -397,6 +414,7 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
             Surface.ROTATION_90, Surface.ROTATION_270 -> {
                 layoutParams.dimensionRatio = "w,16:9"
             }
+
             else -> {
                 layoutParams.dimensionRatio = "h,9:16"
             }
