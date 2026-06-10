@@ -153,9 +153,9 @@ class ConfigurationActivity : AppCompatActivity() {
             return
         }
 
-        // Get stream key from input
-        var streamKey = streamKeyField.text.toString().trim()
-        Log.i(TAG, "Entered stream key: ${if (streamKey.isNotEmpty()) "***HIDDEN***" else "EMPTY"}")
+        // Get stream key from input (also accepts a full RTMPS URL pasted by mistake)
+        var streamKey = LiveStreamActivity.sanitizeStreamKey(streamKeyField.text.toString())
+        Log.i(TAG, "Entered stream key: ${if (streamKey.isNotEmpty()) "***HIDDEN*** (length=${streamKey.length})" else "EMPTY"}")
 
         // Use default key if empty
         if (streamKey.isEmpty() && DEFAULT_STREAM_KEY.isNotEmpty()) {
