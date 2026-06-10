@@ -7,10 +7,11 @@
     android:background="@color/black">
 
     <!-- Full Screen Camera Preview -->
-    <SurfaceView
+    <com.pedro.library.view.OpenGlView
         android:id="@+id/surfaceView"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:keepScreenOn="true"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

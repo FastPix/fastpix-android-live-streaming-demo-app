@@ -1,6 +1,8 @@
 package io.fastpix.data.fastpixlive
 
 import android.content.pm.ActivityInfo
+import android.media.MediaCodec
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -14,17 +16,19 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import com.pedro.common.ConnectChecker
-import com.pedro.common.VideoCodec
+import com.pedro.encoder.CodecErrorCallback
 import com.pedro.encoder.input.video.CameraHelper
+import com.pedro.encoder.utils.CodecUtil.CodecTypeError
 import com.pedro.library.rtmp.RtmpCamera1
 import com.pedro.library.util.FpsListener
+import com.pedro.library.view.OpenGlView
 import java.io.IOException
 
 class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectChecker, View.OnTouchListener {
 
     companion object {
         private const val TAG = "FastPixLive"
-        private const val rtmpEndpoint = "rtmps://live.cloudflare.com:443/live/"
+        private const val rtmpEndpoint = "rtmps://live.cloudflare.com:443/live"
 
         const val intentExtraStreamKey = "STREAMKEY"
         const val intentExtraPreset = "PRESET"
@@ -32,6 +36,15 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
         private const val ZERO_FPS = "0 fps"
         private const val GO_LIVE_TEXT = "Go Live!"
         private const val CHANNEL_IS_CLOSED_FOR_WRITE = "Channel is closed for write"
+        private const val STREAM_HEALTH_CHECK_DELAY_MS = 8000L
+
+        fun sanitizeStreamKey(input: String): String {
+            var key = input.trim()
+            if (key.contains("://")) {
+                key = key.substringAfterLast('/').trim()
+            }
+            return key.trim('/')
+        }
     }
 
     enum class Preset(val bitrate: Int, val width: Int, val height: Int, val frameRate: Int) {
@@ -44,7 +57,7 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
     private lateinit var goLiveButton: Button
     private lateinit var bitrateLabel: TextView
     private lateinit var fpsLabel: TextView
-    private lateinit var surfaceView: SurfaceView
+    private lateinit var openGlView: OpenGlView
     private lateinit var connectionStatus: View
     private lateinit var backCameraButton: TextView
     private lateinit var frontCameraButton: TextView
@@ -54,13 +67,20 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
     private var liveDesired = false
     private var streamKey: String? = null
     private var preset: Preset? = null
+    private var activePreset: Preset? = null
     private var isBackCamera = true
+    private var isStoppingStream = false
+
+    private val healthCheckHandler = Handler(Looper.getMainLooper())
+    private var healthCheckRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_livestream)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+
+        Log.i(TAG, "Device: ${Build.MANUFACTURER} ${Build.MODEL}, API ${Build.VERSION.SDK_INT}")
 
         initializeViews()
         setupCamera()
@@ -71,9 +91,9 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
     }
 
     private fun initializeViews() {
-        surfaceView = findViewById(R.id.surfaceView)
-        surfaceView.holder.addCallback(this)
-        surfaceView.setOnTouchListener(this)
+        openGlView = findViewById(R.id.surfaceView)
+        openGlView.holder.addCallback(this)
+        openGlView.setOnTouchListener(this)
 
         goLiveButton = findViewById(R.id.goLiveButton)
         closeButton = findViewById(R.id.closeButton)
@@ -93,19 +113,33 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
 
     private fun setupCamera() {
         try {
-            rtmpCamera = RtmpCamera1(surfaceView, this)
+            rtmpCamera = RtmpCamera1(openGlView, this)
 
-            val callback = object : FpsListener.Callback {
+            rtmpCamera.setFpsListener(object : FpsListener.Callback {
                 override fun onFps(fps: Int) {
                     runOnUiThread {
                         fpsLabel.text = "$fps fps"
                     }
                 }
-            }
-            rtmpCamera.setFpsListener(callback)
+            })
 
+            rtmpCamera.setEncoderErrorCallback(object : CodecErrorCallback {
+                override fun onCodecError(type: CodecTypeError, e: MediaCodec.CodecException) {
+                    Log.e(TAG, "Codec error [$type]: ${e.diagnosticInfo} - ${e.message}")
+                    runOnUiThread {
+                        showToast("Encoder error: ${e.message}")
+                        connectionStatus.setBackgroundResource(R.drawable.connection_dot_red)
+                    }
+                }
+
+                override fun onEncodeError(type: CodecTypeError, e: IllegalStateException): Boolean {
+                    Log.e(TAG, "Encode error [$type]: ${e.message}")
+                    return true
+                }
+            })
         } catch (e: RuntimeException) {
             Log.e(TAG, "Camera setup failed: ${e.message}")
+            showToast("Camera setup failed on this device")
         }
     }
 
@@ -167,8 +201,9 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
 
     private fun handleIntent() {
         intent.extras?.let { extras ->
-            streamKey = extras.getString(intentExtraStreamKey)
+            streamKey = sanitizeStreamKey(extras.getString(intentExtraStreamKey).orEmpty())
             preset = extras.getSerializable(intentExtraPreset) as? Preset
+            Log.i(TAG, "Preset: ${preset?.name}, stream key length: ${streamKey?.length ?: 0}")
         }
     }
 
@@ -180,6 +215,61 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
         }
     }
 
+    private fun getPreviewPreset(): Preset {
+        return preset ?: Preset.sd_540p_30fps_2mbps
+    }
+
+    private fun startPreviewIfNeeded() {
+        if (!::rtmpCamera.isInitialized || rtmpCamera.isStreaming) return
+
+        val previewPreset = getPreviewPreset()
+        try {
+            rtmpCamera.startPreview(previewPreset.width, previewPreset.height)
+            Log.i(TAG, "Preview started at ${previewPreset.width}x${previewPreset.height}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Preview failed: ${e.message}")
+        }
+    }
+
+    private fun tryPrepareEncoders(targetPreset: Preset): Boolean {
+        val rotation = CameraHelper.getCameraOrientation(this)
+        val videoReady = rtmpCamera.prepareVideo(
+            targetPreset.width,
+            targetPreset.height,
+            targetPreset.frameRate,
+            targetPreset.bitrate,
+            2,
+            rotation
+        )
+        val audioReady = rtmpCamera.prepareAudio(128 * 1024, 48000, true)
+
+        Log.i(
+            TAG,
+            "Encoder prep ${targetPreset.name} (${targetPreset.width}x${targetPreset.height}): " +
+                "video=$videoReady audio=$audioReady"
+        )
+        return videoReady && audioReady
+    }
+
+    private fun prepareEncodersWithFallback(primary: Preset): Preset? {
+        val fallbackOrder = listOf(primary) + Preset.values()
+            .filter { it != primary }
+            .sortedBy { it.bitrate }
+
+        for (candidate in fallbackOrder) {
+            if (tryPrepareEncoders(candidate)) {
+                if (candidate != primary) {
+                    Log.w(TAG, "Fell back from ${primary.name} to ${candidate.name}")
+                    runOnUiThread {
+                        showToast("Using ${candidate.width}x${candidate.height} fallback for this device")
+                    }
+                }
+                return candidate
+            }
+        }
+        return null
+    }
+
     private fun startStreaming() {
         val rotation = windowManager.defaultDisplay.rotation
         when (rotation) {
@@ -189,55 +279,57 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
             else -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
 
-        preset?.let { p ->
-            try {
-                rtmpCamera.prepareVideo(
-                    p.width,
-                    p.height,
-                    p.frameRate,
-                    p.bitrate,
-                    4,
-                    CameraHelper.getCameraOrientation(this)
-                )
+        val selectedPreset = preset
+        if (selectedPreset == null) {
+            showToast("No quality preset selected")
+            return
+        }
 
-                rtmpCamera.prepareAudio(
-                    128 * 1024,
-                    48000,
-                    true
-                )
+        val key = streamKey.orEmpty()
+        if (key.isEmpty()) {
+            showToast("Stream key is missing")
+            return
+        }
 
-                val streamUrl = "$rtmpEndpoint/${streamKey.orEmpty()}"
-                rtmpCamera.startStream(streamUrl)
-                liveDesired = true
-                goLiveButton.text = "Connecting... (Cancel)"
-
-                Log.i(TAG, "Stream started")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to start stream: ${e.message}")
-                showToast("Failed to start streaming")
+        try {
+            if (rtmpCamera.isStreaming) {
+                rtmpCamera.stopStream()
             }
+
+            val preparedPreset = prepareEncodersWithFallback(selectedPreset)
+            if (preparedPreset == null) {
+                Log.e(TAG, "All encoder configurations failed on ${Build.MANUFACTURER} ${Build.MODEL}")
+                showToast("This device cannot initialize video/audio encoders")
+                return
+            }
+            activePreset = preparedPreset
+
+            val streamUrl = buildStreamUrl(key)
+            Log.i(TAG, "Publishing to $streamUrl at ${preparedPreset.width}x${preparedPreset.height}")
+            rtmpCamera.startStream(streamUrl)
+            liveDesired = true
+            goLiveButton.text = "Connecting... (Cancel)"
+            Log.i(TAG, "Stream started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start stream: ${e.message}")
+            showToast("Failed to start streaming")
         }
     }
-
-    private var isStoppingStream = false
 
     private fun stopStreaming() {
         if (isStoppingStream) return
 
         isStoppingStream = true
+        cancelStreamHealthCheck()
         goLiveButton.text = "Stopping..."
         liveDesired = false
 
-        // Use a separate thread to avoid blocking UI
         Thread {
             try {
-                // Force immediate disconnection without graceful SSL shutdown
                 if (rtmpCamera.isStreaming) {
-                    // Don't wait for SSL cleanup - just force stop
                     rtmpCamera.stopStream()
                 }
             } catch (e: IOException) {
-                // Specifically catch and ignore SSL/TLS cleanup errors
                 if (e.message?.contains(CHANNEL_IS_CLOSED_FOR_WRITE) == true) {
                     Log.w(TAG, "SSL cleanup race condition (expected): ${e.message}")
                 } else {
@@ -245,11 +337,13 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
                 }
             } finally {
                 isStoppingStream = false
+                activePreset = null
                 runOnUiThread {
                     goLiveButton.text = GO_LIVE_TEXT
                     connectionStatus.setBackgroundResource(R.drawable.connection_dot_red)
                     bitrateLabel.text = ZERO_KBPS
                     fpsLabel.text = ZERO_FPS
+                    startPreviewIfNeeded()
                 }
             }
         }.start()
@@ -257,6 +351,34 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
+    private fun buildStreamUrl(streamKey: String): String {
+        val key = sanitizeStreamKey(streamKey)
+        return "${rtmpEndpoint.trimEnd('/')}/$key"
+    }
+
+    private fun scheduleStreamHealthCheck() {
+        cancelStreamHealthCheck()
+        healthCheckRunnable = Runnable {
+            if (!liveDesired || !rtmpCamera.isStreaming) return@Runnable
+
+            val noBitrate = bitrateLabel.text == ZERO_KBPS
+            val noFps = fpsLabel.text == ZERO_FPS
+            if (noBitrate && noFps) {
+                Log.e(
+                    TAG,
+                    "Stream health check failed on ${Build.MANUFACTURER} ${Build.MODEL}: " +
+                        "connected but sending 0 fps / 0 kbps"
+                )
+                showToast("Connected but no video is being sent. Try 360p quality.")
+            }
+        }
+        healthCheckHandler.postDelayed(healthCheckRunnable!!, STREAM_HEALTH_CHECK_DELAY_MS)
+    }
+
+    private fun cancelStreamHealthCheck() {
+        healthCheckRunnable?.let { healthCheckHandler.removeCallbacks(it) }
+        healthCheckRunnable = null
+    }
 
     private fun showToast(message: String) {
         val toast = Toast.makeText(this, message, Toast.LENGTH_SHORT)
@@ -268,12 +390,10 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        rtmpCamera.stopPreview()
+        val layoutParams = openGlView.layoutParams as ConstraintLayout.LayoutParams
+        val displayRotation = windowManager.defaultDisplay.rotation
 
-        val rotation = windowManager.defaultDisplay.rotation
-        val layoutParams = surfaceView.layoutParams as ConstraintLayout.LayoutParams
-
-        when (rotation) {
+        when (displayRotation) {
             Surface.ROTATION_90, Surface.ROTATION_270 -> {
                 layoutParams.dimensionRatio = "w,16:9"
             }
@@ -281,12 +401,17 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
                 layoutParams.dimensionRatio = "h,9:16"
             }
         }
-        surfaceView.layoutParams = layoutParams
+        openGlView.layoutParams = layoutParams
 
-        rtmpCamera.startPreview(1280, 720)
+        if (!rtmpCamera.isStreaming) {
+            startPreviewIfNeeded()
+        }
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        if (::rtmpCamera.isInitialized && !rtmpCamera.isStreaming) {
+            rtmpCamera.stopPreview()
+        }
     }
 
     override fun onConnectionSuccess() {
@@ -296,17 +421,19 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
             showToast("RTMP Connection Successful!")
         }
         Log.i(TAG, "RTMP connection successful")
+        scheduleStreamHealthCheck()
     }
 
     override fun onConnectionStarted(url: String) {
         runOnUiThread {
             goLiveButton.text = "Connecting... (Cancel)"
         }
-        Log.i(TAG, "RTMP connection started")
+        Log.i(TAG, "RTMP connection started: $url")
     }
 
     override fun onConnectionFailed(reason: String) {
         Log.w(TAG, "RTMP connection failed: $reason")
+        cancelStreamHealthCheck()
         runOnUiThread {
             goLiveButton.text = "Connection Failed"
             connectionStatus.setBackgroundResource(R.drawable.connection_dot_red)
@@ -314,7 +441,6 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
         }
 
         if (liveDesired) {
-            // Clean stop before retry
             Thread {
                 try {
                     if (rtmpCamera.isStreaming) {
@@ -327,7 +453,6 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
                     }
                 }
 
-                // Retry after cleanup
                 Handler(Looper.getMainLooper()).postDelayed({
                     if (liveDesired && !isStoppingStream) {
                         runOnUiThread {
@@ -348,6 +473,7 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
 
     override fun onDisconnect() {
         Log.i(TAG, "RTMP disconnected")
+        cancelStreamHealthCheck()
         runOnUiThread {
             bitrateLabel.text = ZERO_KBPS
             fpsLabel.text = ZERO_FPS
@@ -361,10 +487,11 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
 
     override fun onAuthError() {
         Log.w(TAG, "RTMP auth error")
+        cancelStreamHealthCheck()
         runOnUiThread {
             goLiveButton.text = GO_LIVE_TEXT
             connectionStatus.setBackgroundResource(R.drawable.connection_dot_red)
-            showToast("Authentication Error")
+            showToast("Authentication Error - check stream key")
         }
         liveDesired = false
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -379,6 +506,7 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
     override fun onDestroy() {
         super.onDestroy()
         liveDesired = false
+        cancelStreamHealthCheck()
 
         if (::rtmpCamera.isInitialized) {
             try {
@@ -395,10 +523,8 @@ class LiveStreamActivity : AppCompatActivity(), SurfaceHolder.Callback, ConnectC
 
     override fun onBackPressed() {
         if (liveDesired && !isStoppingStream) {
-            // Stop streaming first, then navigate back
             stopStreaming()
 
-            // Wait for cleanup before finishing
             Handler(Looper.getMainLooper()).postDelayed({
                 super.onBackPressed()
                 finish()
