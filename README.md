@@ -54,8 +54,8 @@ https://github.com/user-attachments/assets/a3e90666-99a1-491e-b652-3ac988bdc7e8
  
 ### Prerequisites
  
-1. **FastPix Account** — Sign up at [FastPix Dashboard](https://dashboard.fastpix.io/signup)
-2. **RTMP Stream Key** — Create a live stream and obtain your [unique stream key](https://docs.fastpix.io/docs/get-started-with-live-streaming). For more details about `streamKey`, see Step 3.
+1. **FastPix Account** — Sign up at [FastPix Dashboard](https://dashboard.fastpix.com/signup)
+2. **RTMP Stream Key** — Create a live stream and obtain your [unique stream key](https://fastpix.com/docs/broadcast/live-stream-with-rtmps). For more details about `streamKey`, see Step 3.
 3. **Android Device** — Android API 16+ required (physical device recommended for optimal performance)
  
 ## Installation
@@ -74,7 +74,7 @@ implementation("androidx.core:core-splashscreen:1.0.1")
 ```
  
  
-4. **Device Testing**
+3. **Device Testing**
    - Connect your physical device (simulator won't work for camera/streaming)
    - Build and run the project
    - Enter your FastPix stream key when prompted
