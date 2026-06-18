@@ -74,7 +74,7 @@ implementation("androidx.core:core-splashscreen:1.0.1")
 ```
  
  
-4. **Device Testing**
+3. **Device Testing**
    - Connect your physical device (simulator won't work for camera/streaming)
    - Build and run the project
    - Enter your FastPix stream key when prompted
